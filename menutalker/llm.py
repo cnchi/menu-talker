@@ -11,6 +11,10 @@ from typing import Any
 import requests
 
 
+class LLMProviderError(RuntimeError):
+    """Raised when an external LLM provider returns a user-actionable error."""
+
+
 @dataclass
 class LLMSettings:
     provider: str = "mock"
@@ -79,6 +83,33 @@ def _chat_completion_url(settings: LLMSettings) -> str:
     return base_url.rstrip("/") + "/chat/completions"
 
 
+def _google_generate_content_url(settings: LLMSettings) -> str:
+    model = settings.model or "gemini-flash-latest"
+    base_url = (settings.base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+
+    if base_url.endswith(":generateContent"):
+        return base_url
+    if "/models/" in base_url:
+        return base_url + ":generateContent"
+    if base_url.endswith("/models"):
+        return f"{base_url}/{model}:generateContent"
+    return f"{base_url}/models/{model}:generateContent"
+
+
+def _provider_error_message(provider: str, response: requests.Response) -> str:
+    detail = response.text.strip()
+    try:
+        payload = response.json()
+        error = payload.get("error", {})
+        if isinstance(error, dict):
+            detail = error.get("message") or detail
+    except ValueError:
+        pass
+    if len(detail) > 800:
+        detail = detail[:797] + "..."
+    return f"{provider} API error {response.status_code}: {detail}"
+
+
 def _google_parts_from_text(text: str) -> list[dict[str, Any]]:
     return [{"text": text}]
 
@@ -125,9 +156,7 @@ def _call_google_generate_content(
     if not settings.api_key:
         raise ValueError("GOOGLE_API_KEY, GEMINI_API_KEY, LLM_API_KEY, or the API key field is required for Google provider.")
 
-    model = settings.model or "gemini-flash-latest"
-    base_url = settings.base_url or "https://generativelanguage.googleapis.com/v1beta"
-    url = f"{base_url.rstrip('/')}/models/{model}:generateContent"
+    url = _google_generate_content_url(settings)
 
     user_parts = _google_parts_from_text(user_prompt)
     if settings.include_images and image_paths:
@@ -147,18 +176,27 @@ def _call_google_generate_content(
         },
     }
 
-    response = requests.post(
-        url,
-        headers={
-            "Content-Type": "application/json",
-            "X-goog-api-key": settings.api_key,
-        },
-        json=payload,
-        timeout=120,
-    )
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            url,
+            headers={
+                "Content-Type": "application/json",
+                "X-goog-api-key": settings.api_key,
+            },
+            json=payload,
+            timeout=120,
+        )
+    except requests.RequestException as exc:
+        raise LLMProviderError(f"Google API request failed: {exc}") from exc
+
+    if not response.ok:
+        raise LLMProviderError(_provider_error_message("Google", response))
+
     data = response.json()
-    parts = data["candidates"][0]["content"].get("parts", [])
+    candidates = data.get("candidates") or []
+    if not candidates:
+        raise LLMProviderError("Google API returned no candidates.")
+    parts = candidates[0].get("content", {}).get("parts", [])
     return "".join(part.get("text", "") for part in parts).strip()
 
 
@@ -195,17 +233,23 @@ def call_chat_completion(
     if settings.api_key:
         headers["Authorization"] = f"Bearer {settings.api_key}"
 
-    response = requests.post(
-        _chat_completion_url(settings),
-        headers=headers,
-        json={
-            "model": settings.model,
-            "messages": messages,
-            "temperature": temperature,
-        },
-        timeout=120,
-    )
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            _chat_completion_url(settings),
+            headers=headers,
+            json={
+                "model": settings.model,
+                "messages": messages,
+                "temperature": temperature,
+            },
+            timeout=120,
+        )
+    except requests.RequestException as exc:
+        raise LLMProviderError(f"{settings.provider} API request failed: {exc}") from exc
+
+    if not response.ok:
+        raise LLMProviderError(_provider_error_message(settings.provider, response))
+
     payload = response.json()
     return payload["choices"][0]["message"]["content"]
 

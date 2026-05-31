@@ -142,7 +142,8 @@ with gr.Blocks(title="MenuTalker") as demo:
                 base_url = gr.Textbox(
                     label="Base URL",
                     value=os.getenv("LLM_BASE_URL", ""),
-                    placeholder="Optional OpenAI-compatible endpoint",
+                    placeholder="Optional. For Google, leave blank or use https://generativelanguage.googleapis.com/v1beta",
+                    info="Do not paste an API key here. For Google, a full .../models/<model>:generateContent URL is also accepted.",
                 )
                 api_key = gr.Textbox(label="API key", type="password", placeholder="Prefer HF Space Secrets for public demos")
                 include_images = gr.Checkbox(

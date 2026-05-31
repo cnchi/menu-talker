@@ -153,13 +153,20 @@ def parse_menu(
             "menu_raw_text.txt:\n"
             f"{raw_text}\n"
         )
-        content = call_chat_completion(
-            settings,
-            system_prompt="You produce strict JSON for MenuTalker.",
-            user_prompt=user_prompt,
-            image_paths=image_paths,
-        )
-        menu = extract_json_object(content)
+        try:
+            content = call_chat_completion(
+                settings,
+                system_prompt="You produce strict JSON for MenuTalker.",
+                user_prompt=user_prompt,
+                image_paths=image_paths,
+            )
+            menu = extract_json_object(content)
+        except Exception as exc:
+            warnings.append(
+                "External LLM menu parsing failed; generated a fallback menu from OCR text instead. "
+                f"Reason: {exc}"
+            )
+            menu = mock_parse_menu(raw_text)
 
     validation_errors = validate_menu(menu)
     warnings.extend(validation_errors)

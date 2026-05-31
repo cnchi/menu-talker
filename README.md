@@ -60,6 +60,8 @@ Recommended public-demo setup:
 
 - Use `LLM_PROVIDER=mock` when no external API key is available. The OCR and UI still run, and MenuTalker produces a heuristic demo menu.
 - Use `LLM_PROVIDER=google` for the Google Gemini API, including hosted Gemma models when they are available to your Google AI Studio API key.
+- For Google, `LLM_BASE_URL` may be left blank. If set, use `https://generativelanguage.googleapis.com/v1beta` or a full `.../models/<model>:generateContent` endpoint.
+- If image input is enabled, choose a Google model that supports image parts. `gemini-flash-latest` is a good smoke-test model; hosted Gemma model IDs depend on what your Google AI Studio key can access.
 - Use `LLM_PROVIDER=hf` for Hugging Face Inference Providers through the OpenAI-compatible router.
 - Use `LLM_PROVIDER=openai_compatible` for any OpenAI-compatible endpoint.
 - Use `LLM_PROVIDER=ollama` only when the Space can reach a deployed Ollama-compatible endpoint. A local Ollama server on your own computer is not reachable from a public Space unless you expose it deliberately.

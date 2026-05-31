@@ -79,13 +79,21 @@ def respond(message: str, history: list[dict[str, str]], state: dict[str, Any]) 
             for entry in history
             if entry.get("role") in {"user", "assistant"}
         ]
-        answer = call_chat_completion(
-            settings,
-            system_prompt=system_prompt,
-            user_prompt=message,
-            history=external_history,
-            temperature=0.2,
-        )
+        try:
+            answer = call_chat_completion(
+                settings,
+                system_prompt=system_prompt,
+                user_prompt=message,
+                history=external_history,
+                temperature=0.2,
+            )
+        except Exception as exc:
+            answer = (
+                "I could not reach the external LLM for this turn, so I am keeping the current menu loaded. "
+                f"Provider error: {exc}\n\n"
+                "Please check that the selected Google model name is available for your API key. "
+                "For a quick smoke test, try `gemini-flash-latest` and leave Base URL blank."
+            )
 
     history = [*history, {"role": "user", "content": message}, {"role": "assistant", "content": answer}]
     meal = find_meal(answer) or ""
