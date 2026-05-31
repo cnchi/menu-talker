@@ -66,13 +66,13 @@ Store API keys in Hugging Face Space Secrets, not in files committed to this rep
 
 ## Storage
 
-For Spaces with a mounted storage bucket or persistent storage, set:
+The Space has a storage bucket mounted at `/data`. For privacy, MenuTalker uses the system temporary directory by default. If you intentionally want uploaded images, OCR text, and generated JSON to persist in the mounted bucket, set:
 
 ```text
 MENUTALKER_STORAGE_DIR=/data/menutalker
 ```
 
-If `/data` is not writable, MenuTalker falls back to the system temporary directory.
+If this variable is not set, MenuTalker writes session files to temporary storage instead.
 
 ## Repository Contents
 

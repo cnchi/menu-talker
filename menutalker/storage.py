@@ -16,7 +16,6 @@ def storage_root() -> Path:
     candidates = []
     if configured:
         candidates.append(Path(configured))
-    candidates.append(Path("/data/menutalker"))
     candidates.append(Path(tempfile.gettempdir()) / "menutalker")
 
     for candidate in candidates:
