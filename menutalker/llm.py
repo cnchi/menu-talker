@@ -131,11 +131,16 @@ def _google_parts_from_images(image_paths: list[Path]) -> list[dict[str, Any]]:
 
 def _google_history(history: list[dict[str, str]] | None) -> list[dict[str, Any]]:
     contents = []
+    seen_user = False
     for entry in history or []:
         role = entry.get("role")
         text = entry.get("content", "")
         if role not in {"user", "assistant"} or not text:
             continue
+        if role == "assistant" and not seen_user:
+            continue
+        if role == "user":
+            seen_user = True
         contents.append(
             {
                 "role": "model" if role == "assistant" else "user",
