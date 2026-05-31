@@ -1,0 +1,9 @@
+references/
+.venv/
+.git/
+.env
+data/
+outputs/
+tmp/
+__pycache__/
+*.py[cod]

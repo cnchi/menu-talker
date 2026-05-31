@@ -1,66 +1,101 @@
+---
+title: MenuTalker
+emoji: 🍽️
+colorFrom: green
+colorTo: blue
+sdk: gradio
+sdk_version: 6.15.2
+app_file: app.py
+python_version: "3.11"
+license: apache-2.0
+short_description: A conversational menu assistance system for blind diners.
+suggested_hardware: cpu-basic
+suggested_storage: small
+tags:
+  - accessibility
+  - ocr
+  - gradio
+  - menu-understanding
+  - assistive-technology
+---
+
 # MenuTalker
 
-MenuTalker is a research prototype for conversational menu understanding and ordering assistance for visually impaired diners. The project converts captured menu pages into a structured menu representation, then uses speech dialogue to help users browse categories, select dishes, confirm options, and prepare an order.
+MenuTalker is a research prototype for conversational menu understanding and ordering assistance for blind diners. Unlike OCR readers that read menu text sequentially, MenuTalker converts menu pages into structured JSON and then guides the diner through a concise ordering dialogue.
 
-This repository stores the JSON schema and Large Language Model (LLM) prompts used in the MenuTalker project. Source code, sample menu data, and demonstration materials will be added progressively.
+This repository is prepared as a Hugging Face Spaces demo for a GCCE 2026 paper project.
 
-## Research Goal
+## Demo Workflow
 
-Printed menus are difficult to access through conventional Optical Character Recognition (OCR)-to-speech workflows because the recognized text is usually read sequentially. MenuTalker instead treats a menu as a semi-structured document. It extracts menu text, combines it with the original menu image, generates a structured JavaScript Object Notation (JSON) menu, and supports concise ordering dialogue similar to interaction with a human server.
+1. Upload one or more restaurant menu page images.
+2. Save the pages as `menu_image_01.png`, `menu_image_02.png`, and so on in a temporary session workspace.
+3. Preprocess each image with OpenCV:
+   - resize with cubic interpolation,
+   - convert to grayscale,
+   - denoise lightly,
+   - apply CLAHE contrast enhancement,
+   - create an adaptive-threshold preview image.
+4. Run PaddleOCR and combine all recognized text into `menu_raw_text.txt`.
+5. Convert OCR text, menu images, prompt instructions, and `menu.schema.json` into `menu.json`.
+6. Use `menu.json` to conduct a ChatGPT-style ordering dialogue.
+7. End the dialogue when the assistant emits a final order inside `<MEAL>` and `</MEAL>`.
 
-## System Overview
+## LLM Configuration
 
-The planned MenuTalker workflow is:
+The demo intentionally does not load a large LLM on free Hugging Face Space CPU hardware. Instead, the LLM layer is configurable.
 
-1. Capture one or more menu page images.
-2. Apply image preprocessing to improve OCR quality.
-3. Extract menu text using an OCR engine.
-4. Send the OCR text, original menu images, task prompt, and JSON schema to a multimodal LLM.
-5. Generate a structured JSON menu.
-6. Use the structured menu for voice-based browsing, item selection, option confirmation, price calculation, and order summary.
+Environment variables:
 
-## Repository Structure
+```text
+LLM_PROVIDER=mock | hf | openai_compatible | ollama
+LLM_MODEL=
+LLM_BASE_URL=
+LLM_API_KEY=
+LLM_INCLUDE_IMAGES=false
+MENUTALKER_STORAGE_DIR=/data/menutalker
+```
+
+Recommended public-demo setup:
+
+- Use `LLM_PROVIDER=mock` when no external API key is available. The OCR and UI still run, and MenuTalker produces a heuristic demo menu.
+- Use `LLM_PROVIDER=hf` for Hugging Face Inference Providers through the OpenAI-compatible router.
+- Use `LLM_PROVIDER=openai_compatible` for any OpenAI-compatible endpoint.
+- Use `LLM_PROVIDER=ollama` only when the Space can reach a deployed Ollama-compatible endpoint. A local Ollama server on your own computer is not reachable from a public Space unless you expose it deliberately.
+
+Store API keys in Hugging Face Space Secrets, not in files committed to this repository.
+
+## Storage
+
+For Spaces with a mounted storage bucket or persistent storage, set:
+
+```text
+MENUTALKER_STORAGE_DIR=/data/menutalker
+```
+
+If `/data` is not writable, MenuTalker falls back to the system temporary directory.
+
+## Repository Contents
 
 ```text
 menu-talker/
-├── README.md
+├── app.py
+├── menutalker/
+│   ├── dialogue.py
+│   ├── image_processing.py
+│   ├── llm.py
+│   ├── menu_parser.py
+│   ├── ocr.py
+│   └── storage.py
 ├── menu.schema.json
-└── prompts/
-    ├── prompt_Menu_Structure_Parsing.md
-    └── prompt_LLM_Conversational_Engine.md
+├── prompts/
+│   ├── prompt_Menu_Structure_Parsing.md
+│   └── prompt_LLM_Conversational_Engine.md
+├── requirements.txt
+└── README.md
 ```
 
-## JSON Schema
+The local `references/` folder contains paper drafts and design notes. It is intentionally ignored by both Git and Hugging Face upload rules.
 
-The current schema for structured menu generation is available at:
+## License
 
-- [`menu.schema.json`](./menu.schema.json)
-
-The schema represents menu categories, optional category-level prices, menu items, item prices, selectable options, and short item descriptions. It is intentionally compact so that different restaurant types, languages, and menu formats can be supported in later versions.
-
-## Prompts
-
-The current prompt files are stored in [`prompts/`](./prompts/):
-
-| File | Purpose |
-| --- | --- |
-| [`prompt_Menu_Structure_Parsing.md`](./prompts/prompt_Menu_Structure_Parsing.md) | Instructs the LLM to infer menu layout, correct OCR errors, and generate `menu.json` according to `menu.schema.json`. |
-| [`prompt_LLM_Conversational_Engine.md`](./prompts/prompt_LLM_Conversational_Engine.md) | Instructs the LLM to conduct one-question-at-a-time ordering dialogue, ask required option and quantity questions, calculate the total price, and return the final order enclosed by `<MEAL>` and `</MEAL>`. |
-
-## Planned Modules
-
-| Module | Purpose |
-| --- | --- |
-| `capture` | Capture menu page images from a camera. |
-| `ocr` | Extract text from captured menu images. |
-| `parser` | Convert OCR output and menu images into a structured JSON menu. |
-| `dialogue` | Conduct concise voice-based ordering interaction. |
-| `order_builder` | Store selected items, modifiers, quantities, and total price. |
-
-## Project Status
-
-This repository is currently being prepared for the MenuTalker research paper and prototype implementation. The schema and prompt files have been added. Source code and demonstration files will be added progressively.
-
-## Citation
-
-A formal citation will be added after the related conference paper is accepted or publicly released.
+Apache License 2.0.
