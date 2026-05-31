@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,21 @@ from menutalker.llm import LLMSettings
 from menutalker.menu_parser import parse_menu
 from menutalker.ocr import run_paddle_ocr
 from menutalker.storage import new_session_dir
+
+
+LLM_PROVIDERS = ["mock", "google", "hf", "openai_compatible", "ollama"]
+
+
+def _default_provider() -> str:
+    provider = os.getenv("LLM_PROVIDER", "mock").strip().lower()
+    return provider if provider in LLM_PROVIDERS else "mock"
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes"}
 
 
 def process_menu(
@@ -114,14 +130,25 @@ with gr.Blocks(title="MenuTalker") as demo:
             with gr.Accordion("Runtime settings", open=False):
                 provider = gr.Dropdown(
                     label="LLM provider",
-                    choices=["mock", "google", "hf", "openai_compatible", "ollama"],
-                    value="mock",
+                    choices=LLM_PROVIDERS,
+                    value=_default_provider(),
                     info="Use mock when no external API key is configured.",
                 )
-                model = gr.Textbox(label="Model", placeholder="Example: gemini-flash-latest, gemma-3-27b-it, or llama3.2-vision")
-                base_url = gr.Textbox(label="Base URL", placeholder="Optional OpenAI-compatible endpoint")
+                model = gr.Textbox(
+                    label="Model",
+                    value=os.getenv("LLM_MODEL", ""),
+                    placeholder="Example: gemini-flash-latest, gemma-3-27b-it, or llama3.2-vision",
+                )
+                base_url = gr.Textbox(
+                    label="Base URL",
+                    value=os.getenv("LLM_BASE_URL", ""),
+                    placeholder="Optional OpenAI-compatible endpoint",
+                )
                 api_key = gr.Textbox(label="API key", type="password", placeholder="Prefer HF Space Secrets for public demos")
-                include_images = gr.Checkbox(label="Send menu images to the LLM when the provider supports vision", value=False)
+                include_images = gr.Checkbox(
+                    label="Send menu images to the LLM when the provider supports vision",
+                    value=_env_bool("LLM_INCLUDE_IMAGES", False),
+                )
                 ocr_lang = gr.Dropdown(
                     label="PaddleOCR language",
                     choices=["ch", "en", "japan", "korean", "latin"],
