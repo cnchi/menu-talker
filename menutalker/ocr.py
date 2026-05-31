@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
+os.environ.setdefault("PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT", "0")
 
 
 @dataclass
@@ -21,6 +26,16 @@ def _get_paddle_engine(lang: str) -> Any:
         from paddleocr import PaddleOCR
 
         attempts = [
+            {
+                "lang": lang,
+                "use_textline_orientation": True,
+                "use_doc_orientation_classify": False,
+                "use_doc_unwarping": False,
+                "enable_mkldnn": False,
+            },
+            {"lang": lang, "use_textline_orientation": True, "enable_mkldnn": False},
+            {"lang": lang, "use_angle_cls": True, "enable_mkldnn": False},
+            {"lang": lang, "enable_mkldnn": False},
             {"lang": lang, "use_textline_orientation": True},
             {"lang": lang, "use_angle_cls": True},
             {"lang": lang},
