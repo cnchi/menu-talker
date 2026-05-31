@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Menu Data Schema",
+  "description": "A universal JSON Schema for structured restaurant menu data.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "category": {
+        "type": "string",
+        "description": "The category name of the dishes, e.g., Appetizers, Main Courses, or Set Meals."
+      },
+      "price": {
+        "type": "integer",
+        "description": "The total price defined at the category level, typically used for fixed-price set meals."
+      },
+      "items": {
+        "type": "array",
+        "description": "The list of dishes under this specific category.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The full name of the dish."
+            },
+            "price": {
+              "type": "integer",
+              "description": "The individual price of the dish."
+            },
+            "options": {
+              "type": "array",
+              "description": "Optional conditions or choices, such as cold/hot, spicy/non-spicy, meat types, or selectable items in a combo.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": {
+              "type": "string",
+              "description": "Additional text explanations or ingredient notes provided on the menu."
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "category",
+      "items"
+    ],
+    "additionalProperties": false
+  }
+}
