@@ -32,6 +32,8 @@ class LLMSettings:
         selected_model = (model or os.getenv("LLM_MODEL") or "").strip()
         selected_base_url = (base_url or os.getenv("LLM_BASE_URL") or "").strip()
         selected_api_key = (api_key or os.getenv("LLM_API_KEY") or "").strip()
+        if selected_provider == "google" and not selected_api_key:
+            selected_api_key = (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or "").strip()
         if include_images is None:
             include_images = os.getenv("LLM_INCLUDE_IMAGES", "false").lower() in {"1", "true", "yes"}
         return cls(selected_provider, selected_model, selected_base_url, selected_api_key, include_images)
@@ -77,6 +79,89 @@ def _chat_completion_url(settings: LLMSettings) -> str:
     return base_url.rstrip("/") + "/chat/completions"
 
 
+def _google_parts_from_text(text: str) -> list[dict[str, Any]]:
+    return [{"text": text}]
+
+
+def _google_parts_from_images(image_paths: list[Path]) -> list[dict[str, Any]]:
+    parts = []
+    for image_path in image_paths:
+        data = base64.b64encode(image_path.read_bytes()).decode("ascii")
+        parts.append(
+            {
+                "inline_data": {
+                    "mime_type": "image/png",
+                    "data": data,
+                }
+            }
+        )
+    return parts
+
+
+def _google_history(history: list[dict[str, str]] | None) -> list[dict[str, Any]]:
+    contents = []
+    for entry in history or []:
+        role = entry.get("role")
+        text = entry.get("content", "")
+        if role not in {"user", "assistant"} or not text:
+            continue
+        contents.append(
+            {
+                "role": "model" if role == "assistant" else "user",
+                "parts": [{"text": text}],
+            }
+        )
+    return contents
+
+
+def _call_google_generate_content(
+    settings: LLMSettings,
+    system_prompt: str,
+    user_prompt: str,
+    history: list[dict[str, str]] | None,
+    image_paths: list[Path] | None,
+    temperature: float,
+) -> str:
+    if not settings.api_key:
+        raise ValueError("GOOGLE_API_KEY, GEMINI_API_KEY, LLM_API_KEY, or the API key field is required for Google provider.")
+
+    model = settings.model or "gemini-flash-latest"
+    base_url = settings.base_url or "https://generativelanguage.googleapis.com/v1beta"
+    url = f"{base_url.rstrip('/')}/models/{model}:generateContent"
+
+    user_parts = _google_parts_from_text(user_prompt)
+    if settings.include_images and image_paths:
+        user_parts = [*_google_parts_from_images(image_paths), *user_parts]
+
+    payload = {
+        "systemInstruction": {"parts": [{"text": system_prompt}]},
+        "contents": [
+            *_google_history(history),
+            {
+                "role": "user",
+                "parts": user_parts,
+            },
+        ],
+        "generationConfig": {
+            "temperature": temperature,
+        },
+    }
+
+    response = requests.post(
+        url,
+        headers={
+            "Content-Type": "application/json",
+            "X-goog-api-key": settings.api_key,
+        },
+        json=payload,
+        timeout=120,
+    )
+    response.raise_for_status()
+    data = response.json()
+    parts = data["candidates"][0]["content"].get("parts", [])
+    return "".join(part.get("text", "") for part in parts).strip()
+
+
 def call_chat_completion(
     settings: LLMSettings,
     system_prompt: str,
@@ -87,6 +172,8 @@ def call_chat_completion(
 ) -> str:
     if settings.provider == "mock":
         raise RuntimeError("Mock provider does not call an external LLM.")
+    if settings.provider == "google":
+        return _call_google_generate_content(settings, system_prompt, user_prompt, history, image_paths, temperature)
     if not settings.model:
         raise ValueError("LLM_MODEL or the model field is required for external LLM providers.")
     if settings.provider in {"hf", "openai_compatible"} and not settings.api_key:

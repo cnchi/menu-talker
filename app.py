@@ -114,11 +114,11 @@ with gr.Blocks(title="MenuTalker") as demo:
             with gr.Accordion("Runtime settings", open=False):
                 provider = gr.Dropdown(
                     label="LLM provider",
-                    choices=["mock", "hf", "openai_compatible", "ollama"],
+                    choices=["mock", "google", "hf", "openai_compatible", "ollama"],
                     value="mock",
                     info="Use mock when no external API key is configured.",
                 )
-                model = gr.Textbox(label="Model", placeholder="Example: google/gemma-3-27b-it or llama3.2-vision")
+                model = gr.Textbox(label="Model", placeholder="Example: gemini-flash-latest, gemma-3-27b-it, or llama3.2-vision")
                 base_url = gr.Textbox(label="Base URL", placeholder="Optional OpenAI-compatible endpoint")
                 api_key = gr.Textbox(label="API key", type="password", placeholder="Prefer HF Space Secrets for public demos")
                 include_images = gr.Checkbox(label="Send menu images to the LLM when the provider supports vision", value=False)
