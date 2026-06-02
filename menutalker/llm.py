@@ -43,6 +43,24 @@ class LLMSettings:
         return cls(selected_provider, selected_model, selected_base_url, selected_api_key, include_images)
 
 
+def normalize_text_content(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, (int, float, bool)):
+        return str(content)
+    if isinstance(content, dict):
+        for key in ("text", "content", "value"):
+            if key in content:
+                return normalize_text_content(content[key])
+        return json.dumps(content, ensure_ascii=False)
+    if isinstance(content, (list, tuple)):
+        parts = [normalize_text_content(item) for item in content]
+        return "\n".join(part for part in parts if part)
+    return str(content)
+
+
 def extract_json_object(text: str) -> dict[str, Any]:
     cleaned = text.strip()
     cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
@@ -110,8 +128,8 @@ def _provider_error_message(provider: str, response: requests.Response) -> str:
     return f"{provider} API error {response.status_code}: {detail}"
 
 
-def _google_parts_from_text(text: str) -> list[dict[str, Any]]:
-    return [{"text": text}]
+def _google_parts_from_text(text: Any) -> list[dict[str, Any]]:
+    return [{"text": normalize_text_content(text)}]
 
 
 def _google_parts_from_images(image_paths: list[Path]) -> list[dict[str, Any]]:
@@ -129,12 +147,12 @@ def _google_parts_from_images(image_paths: list[Path]) -> list[dict[str, Any]]:
     return parts
 
 
-def _google_history(history: list[dict[str, str]] | None) -> list[dict[str, Any]]:
+def _google_history(history: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     contents = []
     seen_user = False
     for entry in history or []:
         role = entry.get("role")
-        text = entry.get("content", "")
+        text = normalize_text_content(entry.get("content", ""))
         if role not in {"user", "assistant"} or not text:
             continue
         if role == "assistant" and not seen_user:
@@ -154,7 +172,7 @@ def _call_google_generate_content(
     settings: LLMSettings,
     system_prompt: str,
     user_prompt: str,
-    history: list[dict[str, str]] | None,
+    history: list[dict[str, Any]] | None,
     image_paths: list[Path] | None,
     temperature: float,
 ) -> str:
@@ -209,7 +227,7 @@ def call_chat_completion(
     settings: LLMSettings,
     system_prompt: str,
     user_prompt: str,
-    history: list[dict[str, str]] | None = None,
+    history: list[dict[str, Any]] | None = None,
     image_paths: list[Path] | None = None,
     temperature: float = 0.1,
 ) -> str:
@@ -230,8 +248,14 @@ def call_chat_completion(
     else:
         user_content = user_prompt
 
-    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
-    messages.extend(history or [])
+    messages: list[dict[str, Any]] = [{"role": "system", "content": normalize_text_content(system_prompt)}]
+    for entry in history or []:
+        role = entry.get("role")
+        if role not in {"user", "assistant", "system"}:
+            continue
+        content = normalize_text_content(entry.get("content", ""))
+        if content:
+            messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": user_content})
 
     headers = {"Content-Type": "application/json"}
