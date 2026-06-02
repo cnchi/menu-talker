@@ -91,8 +91,6 @@ menu-talker/
 └── README.md
 ```
 
-The local `references/` folder contains paper drafts and design notes. It is intentionally ignored by both Git and Hugging Face upload rules.
-
 ## License
 
 Apache License 2.0.
