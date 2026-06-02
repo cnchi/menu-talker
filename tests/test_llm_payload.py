@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from menutalker.llm import LLMSettings, call_chat_completion, normalize_text_content
+from menutalker.llm import LLMSettings, call_chat_completion, find_meal, normalize_text_content
 
 
 class FakeResponse:
@@ -48,6 +48,20 @@ class LLMPayloadTests(unittest.TestCase):
         self.assertEqual(contents[0]["parts"][0]["text"], "Tell me about Chef's favorites.")
         self.assertEqual(contents[1]["parts"][0]["text"], "Cheeseburger is available.")
         self.assertEqual(contents[2]["parts"][0]["text"], "I will take Cheeseburger.")
+
+    def test_find_meal_ignores_instructional_tag_mentions_and_uses_final_block(self):
+        text = (
+            "Then output the final order enclosed exactly in `<MEAL>` and `</MEAL>`.\n\n"
+            "Thank you. Your order is complete.\n"
+            "<MEAL>\n"
+            "1 Cheeseburger, 1 California Beach Tacos, 1 Handcrafted Beer. Total: $45.00\n"
+            "</MEAL>"
+        )
+
+        self.assertEqual(
+            find_meal(text),
+            "1 Cheeseburger, 1 California Beach Tacos, 1 Handcrafted Beer. Total: $45.00",
+        )
 
 
 if __name__ == "__main__":

@@ -284,7 +284,13 @@ def call_chat_completion(
 
 
 def find_meal(text: str) -> str | None:
-    match = re.search(r"<MEAL>(.*?)</MEAL>", text, flags=re.IGNORECASE | re.DOTALL)
-    if not match:
-        return None
-    return match.group(1).strip()
+    matches = list(re.finditer(r"<MEAL>(.*?)</MEAL>", text, flags=re.IGNORECASE | re.DOTALL))
+    for match in reversed(matches):
+        meal = match.group(1).strip()
+        if not meal:
+            continue
+        if meal.strip("` \n\t").lower() in {"and", "or"}:
+            continue
+        if re.search(r"[A-Za-z0-9]", meal):
+            return meal
+    return None
