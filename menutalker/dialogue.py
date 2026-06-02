@@ -4,11 +4,12 @@ import json
 import re
 from typing import Any
 
-from .llm import LLMSettings, call_chat_completion, find_meal
+from .llm import LLMSettings, call_chat_completion, find_meal, normalize_text_content
 from .storage import read_project_text
 
 
 FINAL_ORDER_MESSAGE = "Thank you for your order. Your meal will be prepared shortly."
+PROVIDER_FALLBACK_NOTE = "The external LLM is temporarily unavailable, so I will continue with the loaded menu."
 
 
 def _items(menu: dict[str, Any]) -> list[dict[str, Any]]:
@@ -54,6 +55,61 @@ def format_meal(meal: str) -> str:
     if total:
         formatted.append(total)
     return "\n".join(formatted)
+
+
+def _quantity_from_message(message: str) -> int | None:
+    lower = message.lower()
+    match = re.search(r"\b([1-9][0-9]*)\b", lower)
+    if match:
+        return int(match.group(1))
+    words = {
+        "one": 1,
+        "a": 1,
+        "an": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+    }
+    for word, quantity in words.items():
+        if re.search(rf"\b{re.escape(word)}\b", lower):
+            return quantity
+    return None
+
+
+def _find_item_in_text(menu: dict[str, Any], text: str) -> dict[str, Any] | None:
+    lower = text.lower()
+    for item in _items(menu):
+        name = str(item.get("name", ""))
+        name_lower = name.lower()
+        plural = name_lower + "s" if not name_lower.endswith("s") else name_lower
+        if name_lower and (name_lower in lower or plural in lower):
+            return item
+    return None
+
+
+def _post_provider_error_fallback(message: str, history: list[dict[str, str]], state: dict[str, Any], exc: Exception) -> str:
+    menu = state.get("menu") or {}
+    last_assistant = ""
+    for entry in reversed(history):
+        if entry.get("role") == "assistant":
+            last_assistant = normalize_text_content(entry.get("content", ""))
+            break
+
+    quantity = _quantity_from_message(message)
+    item = _find_item_in_text(menu, last_assistant)
+    if quantity is not None and item and "how many" in last_assistant.lower():
+        order = state.setdefault("order", [])
+        order.append({"name": item.get("name"), "price": item.get("price"), "quantity": quantity})
+        return (
+            f"{PROVIDER_FALLBACK_NOTE} Added {quantity} {item.get('name')}. "
+            "Would you like to add drinks, sides, dessert, or anything else?"
+        )
+
+    return (
+        f"{PROVIDER_FALLBACK_NOTE} Please try sending that message again. "
+        f"Provider error: {exc}"
+    )
 
 
 def _mock_response(message: str, state: dict[str, Any]) -> str:
@@ -120,12 +176,7 @@ def respond(message: str, history: list[dict[str, str]], state: dict[str, Any]) 
                 temperature=0.2,
             )
         except Exception as exc:
-            answer = (
-                "I could not reach the external LLM for this turn, so I am keeping the current menu loaded. "
-                f"Provider error: {exc}\n\n"
-                "Please check that the selected Google model name is available for your API key. "
-                "For a quick smoke test, try `gemini-flash-latest` and leave Base URL blank."
-            )
+            answer = _post_provider_error_fallback(message, history, state, exc)
 
     meal = find_meal(answer) or ""
     if meal:

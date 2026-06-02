@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,9 @@ import requests
 
 class LLMProviderError(RuntimeError):
     """Raised when an external LLM provider returns a user-actionable error."""
+
+
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 @dataclass
@@ -128,6 +132,55 @@ def _provider_error_message(provider: str, response: requests.Response) -> str:
     return f"{provider} API error {response.status_code}: {detail}"
 
 
+def _retry_delay(response: requests.Response | None, attempt: int) -> float:
+    if response is not None:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return min(float(retry_after), 8.0)
+            except ValueError:
+                pass
+    return min(2**attempt, 8.0)
+
+
+def _post_json_with_retries(
+    provider: str,
+    url: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    timeout: int = 120,
+    max_attempts: int = 3,
+) -> requests.Response:
+    last_response: requests.Response | None = None
+    last_exception: requests.RequestException | None = None
+
+    for attempt in range(max_attempts):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        except requests.RequestException as exc:
+            last_exception = exc
+            if attempt < max_attempts - 1:
+                time.sleep(_retry_delay(None, attempt))
+                continue
+            raise LLMProviderError(f"{provider} API request failed after {max_attempts} attempts: {exc}") from exc
+
+        if response.ok or response.status_code not in RETRYABLE_STATUS_CODES:
+            return response
+
+        last_response = response
+        if attempt < max_attempts - 1:
+            time.sleep(_retry_delay(response, attempt))
+
+    if last_response is not None:
+        raise LLMProviderError(
+            f"{_provider_error_message(provider, last_response)} "
+            f"(after {max_attempts} attempts; this is usually a temporary provider-side error)"
+        )
+    if last_exception is not None:
+        raise LLMProviderError(f"{provider} API request failed after {max_attempts} attempts: {last_exception}") from last_exception
+    raise LLMProviderError(f"{provider} API request failed after {max_attempts} attempts.")
+
+
 def _google_parts_from_text(text: Any) -> list[dict[str, Any]]:
     return [{"text": normalize_text_content(text)}]
 
@@ -199,18 +252,15 @@ def _call_google_generate_content(
         },
     }
 
-    try:
-        response = requests.post(
-            url,
-            headers={
-                "Content-Type": "application/json",
-                "X-goog-api-key": settings.api_key,
-            },
-            json=payload,
-            timeout=120,
-        )
-    except requests.RequestException as exc:
-        raise LLMProviderError(f"Google API request failed: {exc}") from exc
+    response = _post_json_with_retries(
+        "Google",
+        url,
+        headers={
+            "Content-Type": "application/json",
+            "X-goog-api-key": settings.api_key,
+        },
+        payload=payload,
+    )
 
     if not response.ok:
         raise LLMProviderError(_provider_error_message("Google", response))
@@ -262,19 +312,16 @@ def call_chat_completion(
     if settings.api_key:
         headers["Authorization"] = f"Bearer {settings.api_key}"
 
-    try:
-        response = requests.post(
-            _chat_completion_url(settings),
-            headers=headers,
-            json={
-                "model": settings.model,
-                "messages": messages,
-                "temperature": temperature,
-            },
-            timeout=120,
-        )
-    except requests.RequestException as exc:
-        raise LLMProviderError(f"{settings.provider} API request failed: {exc}") from exc
+    response = _post_json_with_retries(
+        settings.provider,
+        _chat_completion_url(settings),
+        headers=headers,
+        payload={
+            "model": settings.model,
+            "messages": messages,
+            "temperature": temperature,
+        },
+    )
 
     if not response.ok:
         raise LLMProviderError(_provider_error_message(settings.provider, response))

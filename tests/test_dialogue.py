@@ -54,6 +54,41 @@ class DialogueTests(unittest.TestCase):
         self.assertEqual(updated_history[-1]["content"], FINAL_ORDER_MESSAGE)
         self.assertNotIn("<MEAL>", updated_history[-1]["content"])
 
+    def test_respond_uses_local_quantity_fallback_when_provider_fails(self):
+        menu = {
+            "categories": [
+                {
+                    "name": "Chef's Favorites/Main Course",
+                    "items": [{"name": "Cheeseburger", "price": 20.0}],
+                }
+            ]
+        }
+        state = {
+            "menu": menu,
+            "llm": {
+                "provider": "google",
+                "model": "gemma-4-26b-a4b-it",
+                "base_url": "https://generativelanguage.googleapis.com/v1beta",
+                "api_key": "fake-key",
+                "include_images": False,
+            },
+            "meal": "",
+            "order": [],
+        }
+        history = [
+            {"role": "assistant", "content": "What sounds good to you?"},
+            {"role": "user", "content": "I will take Cheeseburger."},
+            {"role": "assistant", "content": "How many Cheeseburgers would you like?"},
+        ]
+
+        with patch("menutalker.dialogue.call_chat_completion", side_effect=RuntimeError("Google API error 500")):
+            updated_history, updated_state, meal = respond("one.", history, state)
+
+        self.assertEqual(meal, "")
+        self.assertIn("temporarily unavailable", updated_history[-1]["content"])
+        self.assertIn("Added 1 Cheeseburger", updated_history[-1]["content"])
+        self.assertEqual(updated_state["order"], [{"name": "Cheeseburger", "price": 20.0, "quantity": 1}])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -49,6 +49,38 @@ class LLMPayloadTests(unittest.TestCase):
         self.assertEqual(contents[1]["parts"][0]["text"], "Cheeseburger is available.")
         self.assertEqual(contents[2]["parts"][0]["text"], "I will take Cheeseburger.")
 
+    def test_retryable_google_error_is_retried(self):
+        calls = []
+
+        class RetryResponse:
+            def __init__(self, ok, status_code, payload):
+                self.ok = ok
+                self.status_code = status_code
+                self._payload = payload
+                self.text = "Internal error encountered."
+                self.headers = {}
+
+            def json(self):
+                return self._payload
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            calls.append(json)
+            if len(calls) == 1:
+                return RetryResponse(False, 500, {"error": {"message": "Internal error encountered."}})
+            return RetryResponse(True, 200, {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]})
+
+        settings = LLMSettings(
+            provider="google",
+            model="gemini-flash-latest",
+            api_key="fake-key",
+        )
+
+        with patch("menutalker.llm.time.sleep"), patch("menutalker.llm.requests.post", fake_post):
+            answer = call_chat_completion(settings, "System prompt", "one.")
+
+        self.assertEqual(answer, "ok")
+        self.assertEqual(len(calls), 2)
+
     def test_find_meal_ignores_instructional_tag_mentions_and_uses_final_block(self):
         text = (
             "Then output the final order enclosed exactly in `<MEAL>` and `</MEAL>`.\n\n"
