@@ -20,22 +20,26 @@ If you arrived here from the paper, these are the key files to download or inspe
 
 ## Demo Workflow
 
-1. Upload one or more restaurant menu page images.
-2. Save the pages as `menu_image_01.png`, `menu_image_02.png`, and so on in a temporary session workspace.
-3. Preprocess each image with OpenCV:
-   - resize with cubic interpolation,
+The paper describes the intended SBC-based prototype with voice commands, camera capture, OCR, LLM parsing, dialogue, and TTS. The public Hugging Face Space exposes the same core menu-processing and dialogue modules through a Gradio web interface: reviewers upload menu images and interact with the ordering assistant by text.
+
+1. Upload one or more printed-menu page images in the Gradio demo.
+2. Save the uploaded pages in a new session directory as `menu_image_01.png`, `menu_image_02.png`, and so on.
+3. Preprocess each image with OpenCV and Pillow:
+   - correct image orientation and save the page as RGB PNG,
+   - optionally enlarge small images with cubic interpolation,
    - convert to grayscale,
-   - denoise lightly,
+   - denoise and lightly blur the image,
    - apply CLAHE contrast enhancement,
-   - create an adaptive-threshold preview image.
-4. Run PaddleOCR and combine all recognized text into `menu_raw_text.txt`.
-5. Convert OCR text, menu images, prompt instructions, and `menu.schema.json` into `menu.json`.
-6. Use `menu.json` to conduct a ChatGPT-style ordering dialogue.
-7. End the dialogue when the assistant emits a final order inside `<MEAL>` and `</MEAL>`.
+   - create an adaptive-threshold binary preview for display in the demo.
+4. Run PaddleOCR on the enhanced grayscale images and combine recognized text from all pages into `menu_raw_text.txt`, sorted approximately by page layout.
+5. Convert `menu_raw_text.txt`, the original menu images when vision input is enabled, `prompt_Menu_Structure_Parsing.md`, and `menu.schema.json` into a structured `menu.json`.
+6. Validate `menu.json` against the JSON Schema and show warnings when validation issues are found. If the external LLM call or JSON extraction fails, the demo falls back to a lightweight OCR-text parser so the workflow remains testable.
+7. Use `menu.json` and `prompt_LLM_Conversational_Engine.md` to conduct a concise ordering dialogue instead of reading the whole menu sequentially.
+8. End the dialogue when the assistant emits a final order inside `<MEAL>` and `</MEAL>`, matching the ending rule described in the paper.
 
 ## LLM Configuration
 
-The demo intentionally does not load a large LLM on free Hugging Face Space CPU hardware. Instead, the LLM layer is configurable.
+The paper uses an external multimodal LLM role for menu-structure parsing and conversational ordering. The Hugging Face Space demo keeps this LLM layer configurable instead of loading a large model on free CPU hardware.
 
 Environment variables:
 
@@ -45,31 +49,34 @@ LLM_MODEL=
 LLM_BASE_URL=
 LLM_API_KEY=
 GOOGLE_API_KEY=
+GEMINI_API_KEY=
 LLM_INCLUDE_IMAGES=false
 MENUTALKER_STORAGE_DIR=/data/menutalker
 ```
 
-Recommended public-demo setup:
+Runtime settings in the Gradio UI can override these environment values for a session.
 
-- Use `LLM_PROVIDER=mock` when no external API key is available. The OCR and UI still run, and MenuTalker produces a heuristic demo menu.
-- Use `LLM_PROVIDER=google` for the Google Gemini API, including hosted Gemma models when they are available to your Google AI Studio API key.
-- For Google, `LLM_BASE_URL` may be left blank. If set, use `https://generativelanguage.googleapis.com/v1beta` or a full `.../models/<model>:generateContent` endpoint.
-- If image input is enabled, choose a Google model that supports image parts. `gemini-flash-latest` is a good smoke-test model; hosted Gemma model IDs depend on what your Google AI Studio key can access.
-- Use `LLM_PROVIDER=hf` for Hugging Face Inference Providers through the OpenAI-compatible router.
-- Use `LLM_PROVIDER=openai_compatible` for any OpenAI-compatible endpoint.
-- Use `LLM_PROVIDER=ollama` only when the Space can reach a deployed Ollama-compatible endpoint. A local Ollama server on your own computer is not reachable from a public Space unless you expose it deliberately.
+- Use `LLM_PROVIDER=mock` when no external API key is available. PaddleOCR and the UI still run, and MenuTalker generates a heuristic structured menu and mock dialogue from OCR text.
+- Use `LLM_PROVIDER=google` for the Google Gemini API or hosted models available to your Google AI Studio API key. The key may be supplied through `GOOGLE_API_KEY`, `GEMINI_API_KEY`, `LLM_API_KEY`, or the UI field.
+- For Google, `LLM_MODEL` may be left blank for the demo default (`gemini-flash-latest`). `LLM_BASE_URL` may also be left blank; if set, use `https://generativelanguage.googleapis.com/v1beta`, a `/models` URL, or a full `.../models/<model>:generateContent` endpoint.
+- Set `LLM_INCLUDE_IMAGES=true` only when the selected provider and model can accept image input. When enabled, MenuTalker sends the original menu images together with the OCR text for menu-structure parsing.
+- Use `LLM_PROVIDER=hf` for Hugging Face Inference Providers through the OpenAI-compatible router. `LLM_MODEL` and an API key are required.
+- Use `LLM_PROVIDER=openai_compatible` for any OpenAI-compatible endpoint. `LLM_MODEL`, `LLM_BASE_URL`, and an API key are required.
+- Use `LLM_PROVIDER=ollama` for an Ollama-compatible endpoint. If `LLM_BASE_URL` is blank, the code uses `http://localhost:11434/v1`, which is only useful when that endpoint is reachable from the running Space or local environment.
 
 Store API keys in Hugging Face Space Secrets, not in files committed to this repository.
 
 ## Storage
 
-The Space has a storage bucket mounted at `/data`. For privacy, MenuTalker uses the system temporary directory by default. If you intentionally want uploaded images, OCR text, and generated JSON to persist in the mounted bucket, set:
+Each processed menu runs in its own session directory. The session contains the uploaded page images, processed OCR inputs, binary preview images, `menu_raw_text.txt`, and `menu.json`.
+
+By default, MenuTalker stores session files under the system temporary directory. If you intentionally want generated demo artifacts to persist on a Hugging Face Space with persistent storage, set:
 
 ```text
 MENUTALKER_STORAGE_DIR=/data/menutalker
 ```
 
-If this variable is not set, MenuTalker writes session files to temporary storage instead.
+When a session starts, MenuTalker checks whether the configured storage directory is writable. If it is missing, unset, or not writable, the code automatically falls back to temporary storage.
 
 ## Repository Contents
 
