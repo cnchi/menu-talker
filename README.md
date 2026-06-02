@@ -1,29 +1,20 @@
----
-title: MenuTalker
-emoji: 🍽️
-colorFrom: green
-colorTo: blue
-sdk: gradio
-sdk_version: 6.15.2
-app_file: app.py
-python_version: "3.11"
-license: apache-2.0
-short_description: A conversational menu assistance system for blind diners.
-suggested_hardware: cpu-basic
-suggested_storage: small
-tags:
-  - accessibility
-  - ocr
-  - gradio
-  - menu-understanding
-  - assistive-technology
----
-
 # MenuTalker
+
+[![Hugging Face Space](https://img.shields.io/badge/Hugging%20Face-MenuTalker-FFD21E?logo=huggingface&logoColor=black)](https://cnchi-menutalker.hf.space/)
 
 MenuTalker is a research prototype for conversational menu understanding and ordering assistance for blind diners. Unlike OCR readers that read menu text sequentially, MenuTalker converts menu pages into structured JSON and then guides the diner through a concise ordering dialogue.
 
 This repository is prepared as a Hugging Face Spaces demo for a GCCE 2026 paper project.
+
+## Paper Resources
+
+If you arrived here from the paper, these are the key files to download or inspect for reproducing the MenuTalker menu parsing and dialogue workflow.
+
+| File | Purpose |
+| --- | --- |
+| [menu.schema.json](menu.schema.json) | Defines the JSON Schema for the structured `menu.json` output generated from OCR text and menu images. |
+| [prompt_Menu_Structure_Parsing.md](prompts/prompt_Menu_Structure_Parsing.md) | Contains the prompt instructions for converting OCR results and menu context into schema-compliant structured menu data. |
+| [prompt_LLM_Conversational_Engine.md](prompts/prompt_LLM_Conversational_Engine.md) | Contains the prompt instructions for the conversational ordering engine that guides diners through menu exploration and final order selection. |
 
 ## Demo Workflow
 
