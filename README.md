@@ -4,6 +4,8 @@
 
 MenuTalker is a research prototype for conversational menu understanding and ordering assistance for blind diners. Unlike OCR readers that read menu text sequentially, MenuTalker converts menu pages into structured JSON and then guides the diner through a concise ordering dialogue.
 
+Use the Hugging Face Space badge above to try MenuTalker online.
+
 This repository is prepared as a Hugging Face Spaces demo for a GCCE 2026 paper project.
 
 ## Paper Resources
